@@ -5,30 +5,51 @@ require(data.table)
 require(ggplot2)
 N=1000
 p=list(eta=-0.5,gamma=0.7,alpha=0.6,rho=0.8,delta=1.2)
-data=data.table(i=1:N,x=rnorm(N),z=rnorm(N),nu=rnorm(N)*0.6,xi=rnorm(N)*0.1,mu=rnorm(N)* 0.3,coinflip=runif(N)<0.5)
-data[,w:=z+mu]
-data[,h:=((1+p$eta)/(p$gamma-p$eta))*w - (p$alpha/(p$gamma-p$eta))*x + (1/(p$gamma-p$eta))*(p$rho*nu+xi)]
+data=data.table(i=1:N,x=rnorm(N),z=rnorm(N),nu=rnorm(N)*0.6,xi=rnorm(N)*0.1,mu=rnorm(N)*0.3,coinflip=runif(N)<0.5)
+data[,w:= z+ mu]
+data[,h:=(1+p$eta)/(p$gamma-p$eta)*data$w - (p$alpha/(p$gamma-p$eta))*data$x - 1/(p$gamma-p$eta)*(p$rho*data$nu + data$xi)]
 fit1=lm(h ~ w+x, data)
 summary(fit1)
+# The Marshallian elasticity is the coefficient on w
+# which in our case is (1+eta)/(gamma-eta)
+# so (1+(-0.5))/(0.7-(-.5))=0.41666
+# The estimate in this regression was 0.42527, which is pretty close.
 ggplot(data,aes(x=w,y=(p$rho*nu+xi)))+geom_smooth()
+# We observe that this is linear (horizontal) and near zero. 
 
 #3.2
-data[, e:= p$delta*z + nu > 0]
+data[, e:= (p$delta*z + nu) < 0]
 data[e==0,w:=NA]
 data[e==0,h:=NA]
-fit2=lm(h ~ w+x, data)
+fit2=lm(h~w + x, data)
 summary(fit2)
+# I also find that for every time I run this regression, the estimate on w is biased upward by about 20%
 ggplot(data,aes(x=w,y=(p$rho*nu+xi)))+geom_smooth()
-data[,hpred2:=predict(fit2)]
-ggplot(data,aes(x=h,y=hpred2))+geom_point()
-fit3 = glm(e~w+z,family=binomial('probit'),data)
+# The average here is not zero, so we know the estimate is biased
+data[,hpred:=predict(fit1)]
+ggplot(data,aes(x=z,y=hpred))+geom_point()
+# This is upward sloping in z, meaning that z influences the participation decision
+
+fit3 = glm(e~z,family=binomial('probit'),data)
 summary(fit3)
-data[,dpred:=predict(fit3)]
+# the coefficient on z is negative, which is what we expect because
+# when z increases, the reservation wage increases, 
+# meaning that the probability of deciding to work will be lower
+data[,epred:=predict(fit3)]
+ggplot(data,aes(x=p$delta*z,y=epred))+geom_point()
+# We observe downward sloping at a 45 degree angle
+
 coef(fit2)[3]/coef(fit2)[2]
 coef(fit3)[3]/coef(fit3)[2]
-data[,lambda:=dnorm(dpred)/pnorm(dpred)]
-lm(h~w+x+lambda,data)
+data[,lambda:=dnorm(epred)/pnorm(epred)]
+ggplot(data, aes(x=p$delta*z, y=lambda)) + geom_point()
+
+fit4=lm(h~w+x+lambda,data)
+summary(fit4)
 ggplot(data,aes(x=w+p$alpha*z,y=lambda))+geom_point()
+# The coefficient on w is near the Marshallian elasticity ~ .4166
+
+
 
 
 
